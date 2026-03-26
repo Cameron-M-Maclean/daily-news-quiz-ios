@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# Xcode build artifacts — these are regenerated every build, no need to track
+build/
+DerivedData/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# CocoaPods (not using, but good practice)
+Pods/
+
+# Xcode schemes — personal workspace settings
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace

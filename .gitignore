@@ -1,6 +1,9 @@
 # macOS
 .DS_Store
 
+# Claude Code memory
+.claude/
+
 # Xcode build artifacts — these are regenerated every build, no need to track
 build/
 DerivedData/

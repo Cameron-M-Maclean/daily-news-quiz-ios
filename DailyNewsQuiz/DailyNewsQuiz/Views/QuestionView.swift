@@ -2,6 +2,11 @@ import SwiftUI
 
 struct QuestionView: View {
     @ObservedObject var session: QuizSession
+    let quizService: QuizService
+    let onDone: () -> Void
+
+    @State private var answerText: String = ""
+    @FocusState private var fieldIsFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -15,29 +20,93 @@ struct QuestionView: View {
                 .font(.title3)
                 .fontWeight(.semibold)
 
-            VStack(spacing: 12) {
-                ForEach(session.currentQuestion.options.indices, id: \.self) { index in
-                    Button(session.currentQuestion.options[index]) {
-                        session.submitAnswer(index)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
+            if let feedback = session.pendingFeedback {
+                // Feedback card shown after evaluation
+                FeedbackCard(feedback: feedback)
+
+                Button(session.currentIndex == session.questions.count - 1 ? "See Results" : "Next Question") {
+                    answerText = ""
+                    session.advanceToNext()
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .frame(maxWidth: .infinity)
+            } else {
+                // Answer input shown before submission
+                TextField("Your answer...", text: $answerText, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(4, reservesSpace: true)
+                    .focused($fieldIsFocused)
+                    .disabled(session.isEvaluating)
+
+                Button(action: submitAnswer) {
+                    if session.isEvaluating {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Submit Answer")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.isEvaluating)
             }
 
             Spacer()
         }
         .padding()
         .navigationTitle("Today's Quiz")
+        .navigationBarBackButtonHidden(true)
         .navigationDestination(isPresented: $session.isComplete) {
-            ResultsView(session: session)
+            ResultsView(session: session, onDone: onDone)
+        }
+        .onAppear { fieldIsFocused = true }
+    }
+
+    private func submitAnswer() {
+        let answer = answerText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else { return }
+        fieldIsFocused = false
+
+        Task {
+            await session.submitAnswer(answer, quizService: quizService)
         }
     }
 }
 
+private struct FeedbackCard: View {
+    let feedback: AnswerFeedback
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: feedback.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(feedback.isCorrect ? .green : .red)
+                Text(feedback.isCorrect ? "Correct!" : "Not quite")
+                    .fontWeight(.semibold)
+            }
+
+            Text("Your answer: \(feedback.userAnswer)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Text(feedback.feedbackText)
+                .font(.subheadline)
+        }
+        .padding()
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 #Preview {
-    NavigationStack {
-        QuestionView(session: QuizSession(questions: sampleQuestions))
+    let session = QuizSession(questions: sampleQuestions)
+    return NavigationStack {
+        QuestionView(
+            session: session,
+            quizService: QuizService(apiKey: "preview"),
+            onDone: {}
+        )
     }
 }

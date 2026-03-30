@@ -1,3 +1,6 @@
+# API keys — never commit
+**/Config.swift
+
 # macOS
 .DS_Store
 

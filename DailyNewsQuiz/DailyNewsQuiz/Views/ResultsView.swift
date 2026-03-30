@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ResultsView: View {
     @ObservedObject var session: QuizSession
-    @Environment(\.dismiss) private var dismiss
+    let onDone: () -> Void
 
     var body: some View {
         VStack(spacing: 24) {
@@ -24,8 +24,12 @@ struct ResultsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ForEach(session.questions) { question in
-                        QuestionSummaryRow(question: question, session: session)
+                    ForEach(session.questions.indices, id: \.self) { index in
+                        QuestionSummaryRow(
+                            question: session.questions[index],
+                            feedback: session.feedbacks[index],
+                            number: index + 1
+                        )
                     }
                 }
                 .padding(.horizontal)
@@ -34,8 +38,7 @@ struct ResultsView: View {
             Spacer()
 
             Button("Done") {
-                dismiss()
-                dismiss()
+                onDone()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -72,44 +75,26 @@ struct ResultsView: View {
 
 private struct QuestionSummaryRow: View {
     let question: Question
-    let session: QuizSession
-
-    private var questionIndex: Int? {
-        session.questions.firstIndex(where: { $0.id == question.id })
-    }
-
-    private var selectedAnswer: Int? {
-        guard let index = questionIndex else { return nil }
-        return session.answers[index]
-    }
-
-    private var isCorrect: Bool {
-        selectedAnswer == question.correctIndex
-    }
+    let feedback: AnswerFeedback
+    let number: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
-                Image(systemName: isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(isCorrect ? .green : .red)
-                Text(question.text)
+                Image(systemName: feedback.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(feedback.isCorrect ? .green : .red)
+                Text("Q\(number): \(question.text)")
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
 
-            if let selected = selectedAnswer, !isCorrect {
-                Text("Your answer: \(question.options[selected])")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            Text("Correct: \(question.correctAnswer)")
-                .font(.caption)
-                .foregroundStyle(.green)
-
-            Text(question.explanation)
+            Text("Your answer: \(feedback.userAnswer)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            Text(feedback.feedbackText)
+                .font(.caption)
+                .foregroundStyle(.primary)
         }
         .padding(.vertical, 4)
     }
@@ -117,12 +102,11 @@ private struct QuestionSummaryRow: View {
 
 #Preview {
     let session = QuizSession(questions: sampleQuestions)
-    session.submitAnswer(1)
-    session.submitAnswer(2)
-    session.submitAnswer(3)
-    session.submitAnswer(3)
-    session.submitAnswer(1)
+    // Simulate completed session using sample feedbacks
+    for feedback in sampleFeedbacks {
+        session.feedbacks.append(feedback)
+    }
     return NavigationStack {
-        ResultsView(session: session)
+        ResultsView(session: session, onDone: {})
     }
 }

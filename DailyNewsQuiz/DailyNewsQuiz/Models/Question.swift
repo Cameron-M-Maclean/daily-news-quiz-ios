@@ -3,19 +3,11 @@ import Foundation
 struct Question: Identifiable {
     let id: UUID
     let text: String
-    let options: [String]
-    let correctIndex: Int
-    let explanation: String
+    let modelAnswer: String
 
-    init(id: UUID = UUID(), text: String, options: [String], correctIndex: Int, explanation: String) {
+    init(id: UUID = UUID(), text: String, modelAnswer: String) {
         self.id = id
         self.text = text
-        self.options = options
-        self.correctIndex = correctIndex
-        self.explanation = explanation
-    }
-
-    var correctAnswer: String {
-        options[correctIndex]
+        self.modelAnswer = modelAnswer
     }
 }

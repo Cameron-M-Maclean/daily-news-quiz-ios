@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct DailyNewsQuizApp: App {
+    init() {
+        NotificationManager.shared.requestPermission()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

@@ -23,6 +23,7 @@ struct QuestionView: View {
             if let feedback = session.pendingFeedback {
                 // Feedback card shown after evaluation
                 FeedbackCard(feedback: feedback)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
 
                 Button(session.currentIndex == session.questions.count - 1 ? "See Results" : "Next Question") {
                     answerText = ""
@@ -61,6 +62,7 @@ struct QuestionView: View {
         .navigationDestination(isPresented: $session.isComplete) {
             ResultsView(session: session, onDone: onDone)
         }
+        .animation(.spring(duration: 0.35), value: session.pendingFeedback != nil)
         .onAppear { fieldIsFocused = true }
     }
 
@@ -78,21 +80,34 @@ struct QuestionView: View {
 private struct FeedbackCard: View {
     let feedback: AnswerFeedback
 
+    private var icon: String {
+        switch feedback.result {
+        case .correct: return "checkmark.circle.fill"
+        case .partial: return "circle.lefthalf.filled"
+        case .incorrect: return "xmark.circle.fill"
+        }
+    }
+
+    private var iconColor: Color {
+        switch feedback.result {
+        case .correct: return .green
+        case .partial: return .orange
+        case .incorrect: return .red
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: feedback.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(feedback.isCorrect ? .green : .red)
-                Text(feedback.isCorrect ? "Correct!" : "Not quite")
-                    .fontWeight(.semibold)
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
+                Text(feedback.feedbackText)
+                    .font(.subheadline)
             }
 
             Text("Your answer: \(feedback.userAnswer)")
-                .font(.subheadline)
+                .font(.caption)
                 .foregroundStyle(.secondary)
-
-            Text(feedback.feedbackText)
-                .font(.subheadline)
         }
         .padding()
         .background(.regularMaterial)

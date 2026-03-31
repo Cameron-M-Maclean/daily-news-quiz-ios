@@ -16,17 +16,24 @@ class QuizService {
         let articleText = articles.map { "- [\($0.source)] \($0.title): \($0.summary)" }.joined(separator: "\n")
 
         let prompt = """
-        You are a news quiz generator. Based on the following news headlines and summaries, generate exactly 5 open-ended quiz questions.
+        You are generating questions for a daily news quiz aimed at informed, curious non-experts.
 
         Articles:
         \(articleText)
 
         Rules:
-        - Questions should be accessible to a general audience — no specialist knowledge required
-        - Focus on the main facts: who, what, where, why
-        - A correct answer only needs to capture the key point, not every detail
-        - Each question should be answerable in 1-2 sentences
-        - Cover a variety of topics from the articles
+        - Golden rule: never embed the answer in the question. Bad: "Iran cut oil supplies, pushing prices up — why did Australia introduce free transport?" Good: "Two Australian states announced free public transport this week — why do you think they made that decision?"
+        - Vary the question types across the 5 questions — use a mix of:
+          1. Factual recall ("Who/what/where did X?") — 1-2 of these, easier, good for warming up
+          2. Causal reasoning ("Why do you think X happened?")
+          3. Critical thinking ("What are the broader implications of X?")
+          4. Perspective-taking ("Why might X be doing this, from their point of view?")
+          5. Pattern recognition ("This follows a familiar pattern — what does it remind you of?")
+        - Aim for questions where an informed non-expert can make a reasonable educated guess
+        - If the topic is niche, include enough context in the question that lateral thinking can get close
+        - Keep each question to 2-3 sentences with a single clear prompt at the end
+        - Cover a variety of topics — avoid 5 geopolitical questions in a row
+        - Do not use emoji
         - Respond ONLY with valid JSON — no explanation, no markdown
 
         Format:
@@ -47,18 +54,26 @@ class QuizService {
     // Sends the user's answer to Claude alongside the question and model answer for evaluation.
     func evaluateAnswer(question: Question, userAnswer: String) async throws -> AnswerFeedback {
         let prompt = """
-        You are evaluating a quiz answer. Be encouraging but honest.
+        You are evaluating a quiz answer. Your tone should be warm and conversational — like a knowledgeable friend, not an examiner.
 
         Question: \(question.text)
         Model answer: \(question.modelAnswer)
         User's answer: \(userAnswer)
 
-        Assess whether the user's answer is essentially correct (they understood the key point), partially correct, or incorrect.
-        Give 2-3 sentences of friendly feedback explaining what they got right or wrong.
+        Classify the answer as one of:
+        - "correct": they got the key point, even if not word-for-word
+        - "partial": they got something right but missed an important element
+        - "incorrect": they missed the mark, or said they don't know
 
+        Response guidelines:
+        - correct: Confirm clearly (e.g. "Spot on!" or "Exactly right!"), then add 1-2 sentences of interesting context they didn't mention
+        - partial: Acknowledge what they got right first, then fill in what was missing without being condescending
+        - incorrect: Don't dwell — briefly explain what happened and frame it as something worth knowing. If they said "I don't know", deliver a concise engaging explanation as if telling a story
+
+        Keep the response to 2-4 sentences. Do not use emoji.
         Respond ONLY with valid JSON — no explanation, no markdown:
         {
-          "isCorrect": true or false,
+          "result": "correct" or "partial" or "incorrect",
           "feedbackText": "..."
         }
         """
@@ -121,11 +136,12 @@ class QuizService {
     private func parseFeedback(from text: String, userAnswer: String) throws -> AnswerFeedback {
         guard let data = extractJSON(from: text).data(using: .utf8),
               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let isCorrect = json["isCorrect"] as? Bool,
+              let resultString = json["result"] as? String,
               let feedbackText = json["feedbackText"] as? String
         else { throw QuizError.parseError }
 
-        return AnswerFeedback(userAnswer: userAnswer, feedbackText: feedbackText, isCorrect: isCorrect)
+        let result = AnswerResult(rawValue: resultString) ?? .incorrect
+        return AnswerFeedback(userAnswer: userAnswer, feedbackText: feedbackText, result: result)
     }
 
     // Strips markdown code fences if Claude wraps the JSON in ```json ... ```

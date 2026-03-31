@@ -24,6 +24,6 @@ let sampleQuestions: [Question] = [
 ]
 
 let sampleFeedbacks: [AnswerFeedback] = [
-    AnswerFeedback(userAnswer: "France", feedbackText: "Correct! The 2024 Olympics were held in Paris, France.", isCorrect: true),
-    AnswerFeedback(userAnswer: "Microsoft", feedbackText: "Not quite — it was Apple, not Microsoft, that first hit $3 trillion.", isCorrect: false),
+    AnswerFeedback(userAnswer: "France", feedbackText: "Spot on! The 2024 Olympics were held in Paris — the first time France had hosted since 1968.", result: .correct),
+    AnswerFeedback(userAnswer: "Microsoft", feedbackText: "Not quite — it was Apple that first crossed $3 trillion, briefly in January 2022 and more consistently from 2023.", result: .incorrect),
 ]

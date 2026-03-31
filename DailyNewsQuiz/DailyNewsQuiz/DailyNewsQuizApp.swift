@@ -1,14 +1,9 @@
-//
-//  DailyNewsQuizApp.swift
-//  DailyNewsQuiz
-//
-//  Created by Cameron Maclean on 26/03/2026.
-//
-
 import SwiftUI
 
 @main
 struct DailyNewsQuizApp: App {
+    @StateObject private var statsManager = StatsManager()
+
     init() {
         NotificationManager.shared.requestPermission()
     }
@@ -16,6 +11,8 @@ struct DailyNewsQuizApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(statsManager)
+                .fontDesign(.rounded)
         }
     }
 }

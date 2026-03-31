@@ -2,7 +2,10 @@ import SwiftUI
 
 struct ResultsView: View {
     @ObservedObject var session: QuizSession
+    @EnvironmentObject var statsManager: StatsManager
     let onDone: () -> Void
+
+    @State private var statChanges: StatChanges? = nil
 
     var body: some View {
         VStack(spacing: 24) {
@@ -16,9 +19,14 @@ struct ResultsView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
 
-            Text("\(session.score) out of \(session.questions.count) correct")
+            Text("\(scoreText) out of \(session.questions.count)")
                 .font(.title3)
                 .foregroundStyle(.secondary)
+
+            if let changes = statChanges {
+                StatChangesRow(changes: changes)
+                    .transition(.opacity)
+            }
 
             Divider()
 
@@ -46,30 +54,90 @@ struct ResultsView: View {
         .padding()
         .navigationTitle("Results")
         .navigationBarBackButtonHidden(true)
+        .task {
+            guard statChanges == nil else { return }
+            let changes = statsManager.recordCompletion(
+                correct: session.score,
+                total: session.questions.count
+            )
+
+            withAnimation(.easeIn(duration: 0.4)) {
+                statChanges = changes
+            }
+        }
     }
 
+    // Shows "4" or "4.5" — avoids displaying unnecessary decimal for whole numbers
+    private var scoreText: String {
+        session.score == Double(Int(session.score))
+            ? "\(Int(session.score))"
+            : String(format: "%.1f", session.score)
+    }
+
+    private var maxScore: Double { Double(session.questions.count) }
+
     private var scoreIcon: String {
-        switch session.score {
-        case session.questions.count: return "star.fill"
-        case (session.questions.count / 2)...: return "hand.thumbsup.fill"
-        default: return "arrow.counterclockwise"
-        }
+        if session.score == maxScore { return "star.fill" }
+        if session.score >= maxScore / 2 { return "hand.thumbsup.fill" }
+        return "arrow.counterclockwise"
     }
 
     private var scoreColor: Color {
-        switch session.score {
-        case session.questions.count: return .yellow
-        case (session.questions.count / 2)...: return .green
-        default: return .secondary
-        }
+        if session.score == maxScore { return .yellow }
+        if session.score >= maxScore / 2 { return .green }
+        return .secondary
     }
 
     private var scoreHeading: String {
-        switch session.score {
-        case session.questions.count: return "Perfect score!"
-        case (session.questions.count / 2)...: return "Well done!"
-        default: return "Keep it up!"
+        if session.score == maxScore { return "Perfect score!" }
+        if session.score >= maxScore / 2 { return "Well done!" }
+        return "Keep it up!"
+    }
+}
+
+private struct StatChangesRow: View {
+    let changes: StatChanges
+
+    var body: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Streak")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(changes.streakAfter) \(changes.streakAfter == 1 ? "day" : "days")")
+                        .font(.headline)
+                    if changes.streakAfter != changes.streakBefore {
+                        Text("(+\(changes.streakAfter - changes.streakBefore))")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("Answered Correctly")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(Int(changes.percentageAfter))%")
+                        .font(.headline)
+                    if let before = changes.percentageBefore {
+                        let delta = Int(changes.percentageAfter) - Int(before)
+                        if delta != 0 {
+                            Text(delta > 0 ? "(+\(delta)%)" : "(\(delta)%)")
+                                .font(.caption)
+                                .foregroundStyle(delta > 0 ? .green : .red)
+                        }
+                    }
+                }
+            }
         }
+        .padding()
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -81,8 +149,8 @@ private struct QuestionSummaryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
-                Image(systemName: feedback.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(feedback.isCorrect ? .green : .red)
+                Image(systemName: feedback.result == .correct ? "checkmark.circle.fill" : feedback.result == .partial ? "circle.lefthalf.filled" : "xmark.circle.fill")
+                    .foregroundStyle(feedback.result == .correct ? .green : feedback.result == .partial ? .orange : .red)
                 Text("Q\(number): \(question.text)")
                     .font(.subheadline)
                     .fontWeight(.medium)
@@ -102,11 +170,11 @@ private struct QuestionSummaryRow: View {
 
 #Preview {
     let session = QuizSession(questions: sampleQuestions)
-    // Simulate completed session using sample feedbacks
     for feedback in sampleFeedbacks {
         session.feedbacks.append(feedback)
     }
     return NavigationStack {
         ResultsView(session: session, onDone: {})
+            .environmentObject(StatsManager())
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
+    @EnvironmentObject var statsManager: StatsManager
     @State private var session: QuizSession? = nil
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
@@ -51,6 +52,29 @@ struct HomeView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                 }
+
+                if statsManager.hasStats {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Streak")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(statsManager.currentStreak) \(statsManager.currentStreak == 1 ? "day" : "days")")
+                                .font(.headline)
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Answered Correctly")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(Int(statsManager.answeredCorrectlyPercentage))%")
+                                .font(.headline)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
             }
             .padding()
             .navigationDestination(item: $session) { session in
@@ -83,4 +107,5 @@ struct HomeView: View {
 
 #Preview {
     HomeView()
+        .environmentObject(StatsManager())
 }

@@ -20,8 +20,8 @@ class QuizSession: ObservableObject, Hashable {
         questions[currentIndex]
     }
 
-    var score: Int {
-        feedbacks.filter { $0.isCorrect }.count
+    var score: Double {
+        feedbacks.reduce(0) { $0 + $1.result.points }
     }
 
     // Called when the user submits a text answer.
@@ -42,7 +42,7 @@ class QuizSession: ObservableObject, Hashable {
             let fallback = AnswerFeedback(
                 userAnswer: answer,
                 feedbackText: "Could not evaluate your answer. Please check your connection.",
-                isCorrect: false
+                result: .incorrect
             )
             await MainActor.run {
                 pendingFeedback = fallback

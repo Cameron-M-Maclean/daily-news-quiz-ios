@@ -3,7 +3,11 @@ import Foundation
 class QuizService {
     private let apiKey: String
     private let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
-    private let model = "claude-opus-4-6"
+
+    private enum Model {
+        static let generation = "claude-sonnet-4-6"  // quality needed for question writing
+        static let evaluation = "claude-haiku-4-5-20251001"  // simple classification task, cheapest
+    }
 
     init(apiKey: String) {
         self.apiKey = apiKey
@@ -11,80 +15,64 @@ class QuizService {
 
     // MARK: - Question Generation
 
-    // Takes a list of news articles and asks Claude to generate 5 open-ended quiz questions.
     func generateQuestions(from articles: [Article]) async throws -> [Question] {
-        let articleText = articles.map { "- [\($0.source)] \($0.title): \($0.summary)" }.joined(separator: "\n")
+        // Headlines with URLs — summaries skipped to save tokens; URL included so Claude can associate questions with sources
+        let headlines = articles.map { "- [\($0.source)] \($0.title) (url: \($0.url))" }.joined(separator: "\n")
 
-        let prompt = """
-        You are generating questions for a daily news quiz aimed at informed, curious non-experts.
+        let system = """
+        You generate questions for a daily news quiz aimed at informed, curious non-experts.
 
-        Articles:
-        \(articleText)
+        Golden rule: never embed the answer in the question.
+        Bad: "Iran cut oil supplies, pushing prices up — why did Australia introduce free transport?"
+        Good: "Two Australian states announced free public transport this week — why do you think they made that decision?"
 
-        Rules:
-        - Golden rule: never embed the answer in the question. Bad: "Iran cut oil supplies, pushing prices up — why did Australia introduce free transport?" Good: "Two Australian states announced free public transport this week — why do you think they made that decision?"
-        - Vary the question types across the 5 questions — use a mix of:
-          1. Factual recall ("Who/what/where did X?") — 1-2 of these, easier, good for warming up
-          2. Causal reasoning ("Why do you think X happened?")
-          3. Critical thinking ("What are the broader implications of X?")
-          4. Perspective-taking ("Why might X be doing this, from their point of view?")
-          5. Pattern recognition ("This follows a familiar pattern — what does it remind you of?")
-        - Aim for questions where an informed non-expert can make a reasonable educated guess
-        - If the topic is niche, include enough context in the question that lateral thinking can get close
-        - Keep each question to 2-3 sentences with a single clear prompt at the end
-        - Cover a variety of topics — avoid 5 geopolitical questions in a row
-        - Do not use emoji
-        - Respond ONLY with valid JSON — no explanation, no markdown
+        Vary question types across the 5 questions:
+        1. Factual recall ("Who/what/where did X?") — 1-2 of these
+        2. Causal reasoning ("Why do you think X happened?")
+        3. Critical thinking ("What are the broader implications of X?")
+        4. Perspective-taking ("Why might X be doing this, from their point of view?")
+        5. Pattern recognition ("What does this remind you of?")
 
-        Format:
-        [
-          {
-            "question": "...",
-            "modelAnswer": "..."
-          }
-        ]
+        Keep each question to 2-3 sentences. Cover varied topics. Do not use emoji.
+        Respond ONLY with valid JSON — no markdown, no explanation.
+        Format: [{"question": "...", "modelAnswer": "...", "articleTitle": "...", "articleURL": "..."}]
         """
 
-        let responseText = try await callClaude(prompt: prompt)
+        let user = "Headlines:\n\(headlines)"
+
+        let responseText = try await callClaude(system: system, user: user, model: Model.generation, maxTokens: 1024)
         return try parseQuestions(from: responseText)
     }
 
     // MARK: - Answer Evaluation
 
-    // Sends the user's answer to Claude alongside the question and model answer for evaluation.
     func evaluateAnswer(question: Question, userAnswer: String) async throws -> AnswerFeedback {
-        let prompt = """
-        You are evaluating a quiz answer. Your tone should be warm and conversational — like a knowledgeable friend, not an examiner.
+        let system = """
+        You evaluate quiz answers. Be warm and conversational — like a knowledgeable friend, not an examiner.
 
+        Classify as "correct" (got the key point), "partial" (something right but missing an element), or "incorrect" (missed the mark or said they don't know).
+
+        - correct: Confirm clearly, add 1 sentence of interesting context
+        - partial: Acknowledge what they got right, fill in the gap without condescension
+        - incorrect: Briefly explain what happened, frame it as worth knowing. If "I don't know", explain it as a short story
+
+        2-3 sentences max. No emoji.
+        Respond ONLY with valid JSON: {"result": "correct"|"partial"|"incorrect", "feedbackText": "..."}
+        """
+
+        let user = """
         Question: \(question.text)
         Model answer: \(question.modelAnswer)
         User's answer: \(userAnswer)
-
-        Classify the answer as one of:
-        - "correct": they got the key point, even if not word-for-word
-        - "partial": they got something right but missed an important element
-        - "incorrect": they missed the mark, or said they don't know
-
-        Response guidelines:
-        - correct: Confirm clearly (e.g. "Spot on!" or "Exactly right!"), then add 1-2 sentences of interesting context they didn't mention
-        - partial: Acknowledge what they got right first, then fill in what was missing without being condescending
-        - incorrect: Don't dwell — briefly explain what happened and frame it as something worth knowing. If they said "I don't know", deliver a concise engaging explanation as if telling a story
-
-        Keep the response to 2-4 sentences. Do not use emoji.
-        Respond ONLY with valid JSON — no explanation, no markdown:
-        {
-          "result": "correct" or "partial" or "incorrect",
-          "feedbackText": "..."
-        }
         """
 
-        let responseText = try await callClaude(prompt: prompt)
+        let responseText = try await callClaude(system: system, user: user, model: Model.evaluation, maxTokens: 256)
         return try parseFeedback(from: responseText, userAnswer: userAnswer)
     }
 
     // MARK: - Claude API
 
-    private func callClaude(prompt: String) async throws -> String {
+    private func callClaude(system: String, user: String, model: String, maxTokens: Int) async throws -> String {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
@@ -93,9 +81,10 @@ class QuizService {
 
         let body: [String: Any] = [
             "model": model,
-            "max_tokens": 1024,
+            "max_tokens": maxTokens,
+            "system": system,
             "messages": [
-                ["role": "user", "content": prompt]
+                ["role": "user", "content": user]
             ]
         ]
 
@@ -115,6 +104,12 @@ class QuizService {
             throw QuizError.unexpectedResponse
         }
 
+        if let usage = json["usage"] as? [String: Any],
+           let inputTokens = usage["input_tokens"] as? Int,
+           let outputTokens = usage["output_tokens"] as? Int {
+            print("[API] \(model) — in: \(inputTokens) / out: \(outputTokens)")
+        }
+
         return text
     }
 
@@ -129,7 +124,12 @@ class QuizService {
             guard let q = item["question"] as? String,
                   let a = item["modelAnswer"] as? String
             else { return nil }
-            return Question(text: q, modelAnswer: a)
+            return Question(
+                text: q,
+                modelAnswer: a,
+                articleTitle: item["articleTitle"] as? String,
+                articleURL: item["articleURL"] as? String
+            )
         }
     }
 

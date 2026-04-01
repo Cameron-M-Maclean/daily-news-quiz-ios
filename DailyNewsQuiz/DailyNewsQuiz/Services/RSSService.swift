@@ -4,6 +4,7 @@ struct Article {
     let title: String
     let summary: String
     let source: String
+    let url: String
 }
 
 class RSSService: NSObject, XMLParserDelegate {
@@ -60,6 +61,7 @@ private class RSSParser: NSObject, XMLParserDelegate {
     private var currentElement = ""
     private var currentTitle = ""
     private var currentDescription = ""
+    private var currentLink = ""
     private var insideItem = false
 
     init(source: String) {
@@ -79,6 +81,7 @@ private class RSSParser: NSObject, XMLParserDelegate {
             insideItem = true
             currentTitle = ""
             currentDescription = ""
+            currentLink = ""
         }
     }
 
@@ -87,6 +90,7 @@ private class RSSParser: NSObject, XMLParserDelegate {
         switch currentElement {
         case "title": currentTitle += string
         case "description": currentDescription += string
+        case "link": currentLink += string
         default: break
         }
     }
@@ -97,8 +101,9 @@ private class RSSParser: NSObject, XMLParserDelegate {
             let summary = currentDescription
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            let url = currentLink.trimmingCharacters(in: .whitespacesAndNewlines)
             if !title.isEmpty {
-                articles.append(Article(title: title, summary: summary, source: source))
+                articles.append(Article(title: title, summary: summary, source: source, url: url))
             }
             insideItem = false
         }

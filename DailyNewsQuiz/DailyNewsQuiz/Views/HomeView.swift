@@ -3,6 +3,8 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var statsManager: StatsManager
     @State private var session: QuizSession? = nil
+    @State private var testSession: QuizSession? = nil
+    @State private var testQuizSession: QuizSession? = nil
     @State private var isLoading: Bool = false
     @State private var errorMessage: String? = nil
 
@@ -11,49 +13,81 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            VStack(spacing: 0) {
+
                 Spacer()
 
-                Image(systemName: "newspaper.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.tint)
+                // Hero
+                VStack(spacing: 20) {
+                    Image(systemName: "newspaper.fill")
+                        .font(.system(size: 72))
+                        .foregroundStyle(.tint)
 
-                VStack(spacing: 8) {
-                    Text("Daily News Quiz")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+                    VStack(spacing: 8) {
+                        Text("Daily News Quiz")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
 
-                    Text("5 questions from today's headlines")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        Text("5 questions from today's headlines")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
+                Spacer()
+
+                // Error
                 if let error = errorMessage {
                     Text(error)
                         .font(.subheadline)
                         .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                        .padding(.bottom, 16)
                 }
 
-                Spacer()
+                // Primary action
+                VStack(spacing: 14) {
+                    if isLoading {
+                        VStack(spacing: 12) {
+                            ProgressView()
+                            Text("Fetching today's news...")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    } else {
+                        Button("Start Quiz") {
+                            startQuiz()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+                    }
 
-                if isLoading {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Fetching today's news...")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    #if DEBUG
+                    Button("Test Questions") {
+                        testQuizSession = QuizSession(questions: sampleQuestions)
                     }
-                } else {
-                    Button("Start Quiz") {
-                        startQuiz()
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    Button("Test Results") {
+                        let s = QuizSession(questions: sampleQuestions)
+                        s.feedbacks = sampleFeedbacks
+                        s.isComplete = true
+                        testSession = s
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    #endif
                 }
 
+                // Stats bar
                 if statsManager.hasStats {
+                    Divider()
+                        .padding(.top, 28)
+
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Streak")
@@ -73,13 +107,28 @@ struct HomeView: View {
                                 .font(.headline)
                         }
                     }
-                    .padding(.top, 8)
+                    .padding(.top, 20)
                 }
             }
-            .padding()
+            .padding(.horizontal, 28)
+            .padding(.bottom, 40)
+            .padding(.top, 16)
             .navigationDestination(item: $session) { session in
                 QuestionView(session: session, quizService: quizService, onDone: { self.session = nil })
             }
+            .navigationDestination(item: $testSession) { session in
+                ResultsView(session: session, onDone: { self.testSession = nil })
+            }
+            #if DEBUG
+            .navigationDestination(item: $testQuizSession) { session in
+                QuestionView(
+                    session: session,
+                    quizService: MockQuizService(feedbacks: sampleFeedbacks),
+                    onDone: { self.testQuizSession = nil },
+                    testAnswers: sampleFeedbacks.map(\.userAnswer)
+                )
+            }
+            #endif
         }
     }
 
